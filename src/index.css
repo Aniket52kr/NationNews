@@ -1,0 +1,78 @@
+#Nav {
+  background-color: #800000;
+  padding: 10px 0; 
+  font-family: "Josefin Sans", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 500;
+  font-style: normal;
+}
+body{
+  font-family: "Playfair Display", serif;
+  font-optical-sizing: auto;
+  font-weight:440;
+  font-style: normal;
+}
+#About{
+  background-color: #FCFAEE;
+}
+.headline {
+  font-size: 1.2rem;
+  font-family: 'Roboto', sans-serif;
+}
+.timestamp {
+  font-size: 0.8rem;
+  color: #777;
+}
+
+
+.navbar-nav .nav-link {
+    padding: 10px 10px;
+    transition: color 0.5s, background-color 0.9s; 
+}
+.navbar-toggler-icon {
+    background-color: #fff; 
+}
+
+.navbar-brand {
+    font-weight: bold;
+}
+
+.nav-link:hover {
+    color: #E2E2B6; 
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 2.5rem;
+    text-decoration:underline;
+}
+
+.card-img-top {
+    width: 100%; 
+    height: 220px; 
+    object-fit: cover; 
+    border-radius: 1rem;
+}
+
+.card-img-top {
+    width: 100%;
+    transform: scale(1); 
+    transition: transform 0.3s ease-in-out; 
+  }
+  
+  .card:hover .card-img-top {
+    transform: scale(1.03); 
+  }
+  
+  @media (max-width: 700px) {
+    .card-container {
+      display: flex;
+      justify-content: center; 
+      align-items: center; 
+      height: 100vh; 
+      margin-bottom: 0;
+    }
+  
+    .card {
+      width: 100%;
+      max-width: 400px; 
+    }
+  }
+  
