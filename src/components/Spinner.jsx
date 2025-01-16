@@ -1,7 +1,6 @@
 import React from 'react';
 
-const Spinner = ({ loading }) => {
-  if (!loading) return null; // Only show the spinner if loading is true
+const Spinner = () => {
   return (
     <div className="text-center">
       <div className="spinner-border my-2" role="status">

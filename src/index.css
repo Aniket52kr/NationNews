@@ -14,6 +14,7 @@ body{
 }
 #About{
   background-color: #FCFAEE;
+  height: 91vh;
 }
 .headline {
   font-size: 1.2rem;
@@ -27,7 +28,7 @@ body{
 
 .navbar-nav .nav-link {
     padding: 10px 10px;
-    transition: color 0.5s, background-color 0.9s; 
+    
 }
 .navbar-toggler-icon {
     background-color: #fff; 
@@ -41,7 +42,6 @@ body{
     color: #E2E2B6; 
     background-color: rgba(255, 255, 255, 0.1);
     border-radius: 2.5rem;
-    text-decoration:underline;
 }
 
 .card-img-top {
@@ -76,3 +76,54 @@ body{
     }
   }
   
+  footer {
+    background-color: #800000;
+    color: #fff;
+    padding: 20px 0;
+    text-align: center;
+    font-family: "Josefin Sans", sans-serif;
+  }
+
+  footer a {
+    color: #E2E2B6;
+    text-decoration: none;
+    transition: color 0.3s;
+  }
+
+  footer a:hover {
+    color: #fff;
+  }
+
+  footer p {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+
+.button{
+  background-color: #800000;
+  color: white;
+  padding: 10px 20px;
+  border-radius:50%;
+  border: none;
+  cursor: pointer;
+  height: 50px;
+  width: 50px;
+  font-size: 1rem;
+  font-family: "Josefin Sans", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 500;
+  font-style: normal;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.7);
+}
+.button:hover {
+  transform: scale(1.1);
+  transition: transform 0.3s ease-in-out;
+}
+
+@media (max-width: 700px) {
+  .button {
+    position: fixed;
+    bottom: 40px;
+    right: 20px;
+  }
+}

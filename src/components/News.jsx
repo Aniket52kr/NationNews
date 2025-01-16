@@ -1,157 +1,124 @@
-import React, { useEffect, useState } from 'react';
-import NewItem from './NewItem';
-import Spinner from './Spinner';
-import PropTypes from 'prop-types';
-import InfiniteScroll from 'react-infinite-scroll-component';
+import React, { useEffect, useState } from 'react'
+import NewItem from './NewItem'
+import Spinner from './Spinner'
+import PropTypes from 'prop-types'
+import InfiniteScroll from 'react-infinite-scroll-component'
+import ScrollToTop from './ScroolToTop'
 
 const News = (props) => {
+
   const [articles, setArticles] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalArticles, setTotalArticles] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   const capitalizeFirstLetter = (string) => {
     return string.charAt(0).toUpperCase() + string.slice(1);
-  };
-
-  const filterDuplicates = (articles) => {
-    const seen = new Set();
-    return articles.filter((article) => {
-      const duplicate = seen.has(article.url);
-      seen.add(article.url);
-      return !duplicate;
-    });
-  };
+  }
 
   const updateNews = async () => {
-    try {
-      props.setProgress(10);
-      const url = `https://gnews.io/api/v4/top-headlines?category=${props.category}&lang=en&country=${props.country}&apikey=${props.apiKey}&page=${page}&pageSize=${props.pgSize}`;
-      const data = await fetch(url);
-
-      // Handle 403 error (rate limit reached)
-      if (data.status === 403) {
-        console.error('API rate limit reached, switching API key...');
-        props.switchApiKey();  // Switch to the next API key
-        return;
-      }
-
-      const parsedData = await data.json();
-
-      // Check for any errors in the response
-      if (parsedData.errors) {
-        console.error('API Error:', parsedData.errors[0]);
-        setLoading(false);
-        return;
-      }
-
-      props.setProgress(30);
-      props.setProgress(60);
-
-      if (parsedData.articles) {
-        const uniqueArticles = filterDuplicates(parsedData.articles);
-        setArticles(uniqueArticles);
-        setTotalArticles(parsedData.totalArticles || 0);
-      }
-
-      setLoading(false);
-      props.setProgress(100);
-    } catch (error) {
-      console.error('Error fetching news:', error);
-      setLoading(false);  // Stop loading if there is an error
+    setLoading(true);
+    props.setProgress(10);
+    let url = `https://gnews.io/api/v4/top-headlines?category=${props.category}&lang=en&country=${props.country}&apikey=${props.apiKey}&page=${props.page}&pageSize=${props.pgSize}`;
+    let data = await fetch(url);
+    if (data.status === 403) {
+      props.switchApiKey();
+      return;
     }
-  };
+    props.setProgress(30);
+
+    let parsedData = await data.json();
+
+    props.setProgress(60);
+
+    setArticles(parsedData.articles || []);
+    setTotalArticles(parsedData.totalArticles || 0);
+    setLoading(false);
+
+    props.setProgress(100);
+  }
 
   useEffect(() => {
     document.title = `NationNews | ${capitalizeFirstLetter(props.category)}`;
     updateNews();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.apiKey, props.category]);
+  }, [props.apiKey]);
 
   const fetchMoreData = async () => {
-    try {
-      const nextPage = page + 1;
-      const url = `https://gnews.io/api/v4/top-headlines?category=${props.category}&lang=en&country=${props.country}&apikey=${props.apiKey}&page=${nextPage}&pageSize=${props.pgSize}`;
-      const data = await fetch(url);
+    setPage(page + 1);
 
-      // Handle 403 error (rate limit reached)
-      if (data.status === 403) {
-        console.error('API rate limit reached, switching API key...');
-        props.switchApiKey();  // Switch to the next API key
-        return;
-      }
-
-      const parsedData = await data.json();
-
-      if (parsedData.errors) {
-        console.error('API Error:', parsedData.errors[0]);
-        return;
-      }
-
-      if (parsedData.articles) {
-        const uniqueArticles = filterDuplicates([
-          ...articles,
-          ...parsedData.articles,
-        ]);
-        setArticles(uniqueArticles);
-        setTotalArticles(parsedData.totalArticles || 0);
-      }
-
-      setPage(nextPage);
-    } catch (error) {
-      console.error('Error fetching more news:', error);
+    let url = `https://gnews.io/api/v4/top-headlines?category=${props.category}&lang=en&country=${props.country}&apikey=${props.apiKey}&page=${props.page}&pageSize=${props.pgSize}`;
+    let data = await fetch(url);
+    if (data.status === 403) {
+      props.switchApiKey();
+      return;
     }
+    let parsedData = await data.json();
+
+    setArticles(articles.concat(parsedData.articles || []));
+    setTotalArticles(parsedData.totalArticles || 0);
+    setLoading(false);
   };
 
   return (
-    <div className="container pt-10 py-4">
-      <h2
-        className="text-center"
-        style={{ marginTop: '4rem', padding: '0.9rem 0 1rem' }}
-      >
-        Top Headlines - {capitalizeFirstLetter(props.category)}
+    <div className='container pt-10 py-4'>
+      <h2 className="text-center" style={{ marginTop: "4rem", padding: "0.9rem 0 1rem" }}>
+        Top Headlines - {capitalizeFirstLetter(props.category)} 
       </h2>
 
-      {articles.length === 0 && !loading && (
-        <p className="text-center">No articles available.</p>
-      )}
+      {loading ? <Spinner /> : (
+        <InfiniteScroll
+          dataLength={articles.length}
+          next={fetchMoreData}
+          hasMore={articles.length < totalArticles}
+          loader={<Spinner />}
+        >
+          <div className="container">
+            <div className="row">
+              {articles && articles.length > 0 && articles.map((element, index) => {
+                // Check if element is valid and contains the necessary properties
+                if (!element || !element.title) {
+                  return null; // Skip invalid elements
+                }
 
-      <InfiniteScroll
-        dataLength={articles.length}
-        next={fetchMoreData}
-        hasMore={articles.length < totalArticles}
-        loader={<Spinner />}
-      >
-        <div className="container">
-          <div className="row">
-            {articles.map((element, index) => {
-              return (
-                <div className="col-md-4" key={`${element.url}-${index}`}>
-                  <NewItem
-                    title={element.title ? element.title.slice(0, 67) : 'No title available'}
-                    description={element.description ? element.description.slice(0, 75) : 'No description available'}
-                    imageUrl={element.image}
-                    newsUrl={element.url}
-                    date={element.publishedAt}
-                    source={element.source.name}
-                  />
-                </div>
-              );
-            })}
+                const title = element.title ? element.title.slice(0, 67) : "No title available";
+                const description = element.description ? element.description.slice(0, 75) : "No description available";
+                const imageUrl = element.image || '';  
+                const newsUrl = element.url || '#';
+                const date = element.publishedAt || 'No date available';
+                const source = element.source?.name || 'Unknown source';
+
+                const key = `${element.url}-${index}`;
+
+                return (
+                  <div className="col-md-4" key={key}>
+                    <NewItem
+                      title={title}
+                      description={description}
+                      imageUrl={imageUrl}
+                      newsUrl={newsUrl}
+                      date={date}
+                      source={source}
+                    />
+                  </div>
+                );
+              })}
+              <div className='fixed-bottom p-5 d-flex justify-content-end'>
+                <ScrollToTop />
+              </div>
+            </div>
           </div>
-        </div>
-      </InfiniteScroll>
+        </InfiniteScroll>
+      )}
     </div>
   );
-};
+}
 
-// PropTypes validation
 News.propTypes = {
+  setProgress: PropTypes.func.isRequired,
+  apiKey: PropTypes.string.isRequired,
   category: PropTypes.string.isRequired,
   country: PropTypes.string.isRequired,
-  apiKey: PropTypes.string.isRequired,
   pgSize: PropTypes.number.isRequired,
-  setProgress: PropTypes.func.isRequired,
   switchApiKey: PropTypes.func.isRequired,
 };
 
