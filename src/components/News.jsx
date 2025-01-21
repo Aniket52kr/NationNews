@@ -1,71 +1,111 @@
-import React, { useEffect, useState } from 'react'
-import NewItem from './NewItem'
-import Spinner from './Spinner'
-import PropTypes from 'prop-types'
-import InfiniteScroll from 'react-infinite-scroll-component'
-import ScrollToTop from './ScroolToTop'
+import React, { useEffect, useState, useCallback } from 'react';
+import NewItem from './NewItem';
+import Spinner from './Spinner';
+import PropTypes from 'prop-types';
+import InfiniteScroll from 'react-infinite-scroll-component';
+import ScrollToTop from './ScroolToTop';
 
 const News = (props) => {
-
+  const { category, country, apiKey, pgSize, setProgress } = props;
   const [articles, setArticles] = useState([]);
   const [page, setPage] = useState(1);
   const [totalArticles, setTotalArticles] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0); // Track retry count
+  const [isRateLimited, setIsRateLimited] = useState(false); // Track if rate limit exceeded
 
   const capitalizeFirstLetter = (string) => {
     return string.charAt(0).toUpperCase() + string.slice(1);
-  }
+  };
 
-  const updateNews = async () => {
+  // Retry mechanism with fixed backoff time
+  const fetchNews = useCallback(
+    async (pageNumber = 1) => {
+      const url = `https://gnews.io/api/v4/top-headlines?category=${category}&lang=en&country=${country}&apikey=${apiKey}&page=${pageNumber}&pageSize=${pgSize}`;
+
+      // Handling rate-limit state
+      if (isRateLimited) {
+        console.warn("Rate limit reached, waiting before retrying...");
+        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds before retrying
+        setIsRateLimited(false); // Reset rate limit status after waiting
+      }
+
+      let attempt = 0;
+      const maxRetries = 3; // Max retries before failing
+      const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms)); // Delay function
+
+      while (attempt < maxRetries) {
+        try {
+          console.log(`Attempting fetch. Attempt ${attempt + 1}`);
+          let response = await fetch(url);
+
+          if (response.status === 429) {
+            // Rate limit exceeded
+            console.warn(`Rate limit exceeded. Attempt ${attempt + 1} of ${maxRetries}. Retrying after waiting...`);
+            setRetryCount((prev) => prev + 1); // Increment retry count
+            setIsRateLimited(true); // Mark as rate-limited
+            attempt += 1; // Increase attempt count
+            await delay(10000); // Wait 10 seconds before retrying
+            continue; // Retry request after delay
+          }
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch news: ${response.status} ${response.statusText}`);
+          }
+
+          const parsedData = await response.json();
+          return parsedData;
+        } catch (error) {
+          console.error(`Error in fetch attempt ${attempt + 1}:`, error.message);
+          break; // Break the loop if error occurs
+        }
+      }
+
+      console.error(`Max retries reached: ${maxRetries}. Could not fetch news.`);
+      return null; // Return null if max retries exceeded
+    },
+    [apiKey, category, country, pgSize, isRateLimited]
+  );
+
+  const updateNews = useCallback(async () => {
     setLoading(true);
-    props.setProgress(10);
-    let url = `https://gnews.io/api/v4/top-headlines?category=${props.category}&lang=en&country=${props.country}&apikey=${props.apiKey}&page=${props.page}&pageSize=${props.pgSize}`;
-    let data = await fetch(url);
-    if (data.status === 403) {
-      props.switchApiKey();
-      return;
-    }
-    props.setProgress(30);
+    setProgress(10);
 
-    let parsedData = await data.json();
+    const data = await fetchNews();
+    if (!data) return; // Skip if fetch fails or rate limit is exceeded
 
-    props.setProgress(60);
-
-    setArticles(parsedData.articles || []);
-    setTotalArticles(parsedData.totalArticles || 0);
+    setProgress(30);
+    setArticles(data.articles || []);
+    setTotalArticles(data.totalArticles || 0);
     setLoading(false);
-
-    props.setProgress(100);
-  }
+    setProgress(100);
+  }, [fetchNews, setProgress]);
 
   useEffect(() => {
-    document.title = `NationNews | ${capitalizeFirstLetter(props.category)}`;
+    document.title = `NationNews | ${capitalizeFirstLetter(category)}`;
     updateNews();
-  }, [props.apiKey]);
+  }, [category, updateNews]);
 
   const fetchMoreData = async () => {
-    setPage(page + 1);
+    const nextPage = page + 1;
+    setPage(nextPage);
 
-    let url = `https://gnews.io/api/v4/top-headlines?category=${props.category}&lang=en&country=${props.country}&apikey=${props.apiKey}&page=${props.page}&pageSize=${props.pgSize}`;
-    let data = await fetch(url);
-    if (data.status === 403) {
-      props.switchApiKey();
-      return;
-    }
-    let parsedData = await data.json();
+    const data = await fetchNews(nextPage);
+    if (!data) return; // Skip if fetch fails or rate limit is exceeded
 
-    setArticles(articles.concat(parsedData.articles || []));
-    setTotalArticles(parsedData.totalArticles || 0);
-    setLoading(false);
+    setArticles(articles.concat(data.articles || []));
+    setTotalArticles(data.totalArticles || 0);
   };
 
   return (
     <div className='container pt-10 py-4'>
       <h2 className="text-center" style={{ marginTop: "4rem", padding: "0.9rem 0 1rem" }}>
-        Top Headlines - {capitalizeFirstLetter(props.category)} 
+        Top Headlines - {capitalizeFirstLetter(category)}
       </h2>
 
-      {loading ? <Spinner /> : (
+      {loading ? (
+        <Spinner />
+      ) : (
         <InfiniteScroll
           dataLength={articles.length}
           next={fetchMoreData}
@@ -75,14 +115,11 @@ const News = (props) => {
           <div className="container">
             <div className="row">
               {articles && articles.length > 0 && articles.map((element, index) => {
-                // Check if element is valid and contains the necessary properties
-                if (!element || !element.title) {
-                  return null; // Skip invalid elements
-                }
+                if (!element || !element.title) return null;
 
-                const title = element.title ? element.title.slice(0, 67) : "No title available";
-                const description = element.description ? element.description.slice(0, 75) : "No description available";
-                const imageUrl = element.image || '';  
+                const title = element.title.slice(0, 67) || "No title available";
+                const description = element.description.slice(0, 75) || "No description available";
+                const imageUrl = element.image || '';
                 const newsUrl = element.url || '#';
                 const date = element.publishedAt || 'No date available';
                 const source = element.source?.name || 'Unknown source';
@@ -109,9 +146,16 @@ const News = (props) => {
           </div>
         </InfiniteScroll>
       )}
+
+      {/* Display Retry Count */}
+      {retryCount > 0 && (
+        <div className="retry-count">
+          <p>Retry attempts: {retryCount}</p>
+        </div>
+      )}
     </div>
   );
-}
+};
 
 News.propTypes = {
   setProgress: PropTypes.func.isRequired,
@@ -119,7 +163,6 @@ News.propTypes = {
   category: PropTypes.string.isRequired,
   country: PropTypes.string.isRequired,
   pgSize: PropTypes.number.isRequired,
-  switchApiKey: PropTypes.func.isRequired,
 };
 
 export default News;
