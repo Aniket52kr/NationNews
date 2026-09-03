@@ -5,86 +5,81 @@ import PropTypes from 'prop-types';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import ScrollToTop from './ScroolToTop';
 
+const MAX_KEY_RETRIES = 4; // matches the number of API keys rotated in App.js
+
 const News = (props) => {
-  const { category, country, apiKey, pgSize, setProgress } = props;
+  const { category, country, apiKey, pgSize, setProgress, switchApiKey } = props;
   const [articles, setArticles] = useState([]);
   const [page, setPage] = useState(1);
   const [totalArticles, setTotalArticles] = useState(0);
   const [loading, setLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0); // Track retry count
-  const [isRateLimited, setIsRateLimited] = useState(false); // Track if rate limit exceeded
+  const [errorMessage, setErrorMessage] = useState('');
 
   const capitalizeFirstLetter = (string) => {
     return string.charAt(0).toUpperCase() + string.slice(1);
   };
 
-  // Retry mechanism with fixed backoff time
+  // Single attempt per call. On a 429, rotate to the next API key and bail out
+  // immediately instead of sleeping on an already-exhausted key.
   const fetchNews = useCallback(
     async (pageNumber = 1) => {
       const url = `https://gnews.io/api/v4/top-headlines?category=${category}&lang=en&country=${country}&apikey=${apiKey}&page=${pageNumber}&pageSize=${pgSize}`;
 
-      // Handling rate-limit state
-      if (isRateLimited) {
-        console.warn("Rate limit reached, waiting before retrying...");
-        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds before retrying
-        setIsRateLimited(false); // Reset rate limit status after waiting
-      }
+      try {
+        const response = await fetch(url);
 
-      let attempt = 0;
-      const maxRetries = 3; // Max retries before failing
-      const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms)); // Delay function
-
-      while (attempt < maxRetries) {
-        try {
-          console.log(`Attempting fetch. Attempt ${attempt + 1}`);
-          let response = await fetch(url);
-
-          if (response.status === 429) {
-            // Rate limit exceeded
-            console.warn(`Rate limit exceeded. Attempt ${attempt + 1} of ${maxRetries}. Retrying after waiting...`);
-            setRetryCount((prev) => prev + 1); // Increment retry count
-            setIsRateLimited(true); // Mark as rate-limited
-            attempt += 1; // Increase attempt count
-            await delay(10000); // Wait 10 seconds before retrying
-            continue; // Retry request after delay
-          }
-
-          if (!response.ok) {
-            throw new Error(`Failed to fetch news: ${response.status} ${response.statusText}`);
-          }
-
-          const parsedData = await response.json();
-          return parsedData;
-        } catch (error) {
-          console.error(`Error in fetch attempt ${attempt + 1}:`, error.message);
-          break; // Break the loop if error occurs
+        if (response.status === 429) {
+          console.warn('Rate limit hit for current API key, rotating to next key...');
+          setRetryCount((prev) => prev + 1);
+          switchApiKey();
+          return null;
         }
-      }
 
-      console.error(`Max retries reached: ${maxRetries}. Could not fetch news.`);
-      return null; // Return null if max retries exceeded
+        if (!response.ok) {
+          throw new Error(`Failed to fetch news: ${response.status} ${response.statusText}`);
+        }
+
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching news:', error.message);
+        return null;
+      }
     },
-    [apiKey, category, country, pgSize, isRateLimited]
+    [apiKey, category, country, pgSize, switchApiKey]
   );
 
   const updateNews = useCallback(async () => {
+    if (retryCount >= MAX_KEY_RETRIES) {
+      setLoading(false);
+      setErrorMessage('All API keys are currently rate-limited. Please try again later.');
+      return;
+    }
+
     setLoading(true);
+    setErrorMessage('');
     setProgress(10);
 
     const data = await fetchNews();
-    if (!data) return; // Skip if fetch fails or rate limit is exceeded
+    if (!data) {
+      setLoading(false); // Skip if fetch fails or rate limit is exceeded
+      return;
+    }
 
     setProgress(30);
     setArticles(data.articles || []);
     setTotalArticles(data.totalArticles || 0);
     setLoading(false);
     setProgress(100);
-  }, [fetchNews, setProgress]);
+  }, [fetchNews, setProgress, retryCount]);
 
+  // Re-fetch only when the category (route) changes or the API key actually
+  // rotates — not on every incidental re-creation of the memoized callbacks.
   useEffect(() => {
     document.title = `NationNews | ${capitalizeFirstLetter(category)}`;
     updateNews();
-  }, [category, updateNews]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, apiKey]);
 
   const fetchMoreData = async () => {
     const nextPage = page + 1;
@@ -148,9 +143,15 @@ const News = (props) => {
       )}
 
       {/* Display Retry Count */}
-      {retryCount > 0 && (
+      {retryCount > 0 && !errorMessage && (
         <div className="retry-count">
           <p>Retry attempts: {retryCount}</p>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="text-center text-danger">
+          <p>{errorMessage}</p>
         </div>
       )}
     </div>
@@ -163,6 +164,7 @@ News.propTypes = {
   category: PropTypes.string.isRequired,
   country: PropTypes.string.isRequired,
   pgSize: PropTypes.number.isRequired,
+  switchApiKey: PropTypes.func.isRequired,
 };
 
 export default News;
